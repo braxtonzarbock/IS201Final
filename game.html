@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bonjour Bootcamp Game Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .feedback-animation { transition: all 0.3s ease-in-out; }
+
+        /* --- Animations --- */
+        .correct-answer-pulse { animation: correctPulse 0.6s ease-in-out; }
+        .incorrect-answer-shake { animation: incorrectShake 0.5s ease-in-out; }
+        .streak-update-ping { animation: streakPing 0.7s ease-out; }
+        .timer-tick { animation: timerTick 1s ease-out; }
+        .input-error-shake { animation: inputErrorShake 0.4s ease-in-out; }
+
+        @keyframes correctPulse { 0%{transform:scale(1);box-shadow:0 0 0 0 rgba(4,120,87,.7)}50%{transform:scale(1.03);box-shadow:0 0 8px 15px rgba(4,120,87,0)}100%{transform:scale(1);box-shadow:0 0 0 0 rgba(4,120,87,0)} }
+        @keyframes incorrectShake { 0%,100%{transform:translateX(0)}10%,30%,50%,70%,90%{transform:translateX(-6px)}20%,40%,60%,80%{transform:translateX(6px)} }
+        @keyframes streakPing { 0%{transform:scale(1);opacity:1}50%{transform:scale(1.5);opacity:.7}100%{transform:scale(1);opacity:1} }
+        @keyframes timerTick { 50%{transform:scale(1.05)} }
+        @keyframes inputErrorShake { 0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)} }
+
+        /* --- Tab Styles --- */
+        .tab-active { border-color: #10b981; background-color: #ecfdf5; color: #047857; font-weight: 600; }
+        /* --- Difficulty Button Styles --- */
+        .difficulty-btn { transition: background-color 0.2s ease, transform 0.2s ease; padding: 0.5rem 1rem; border-radius: 0.375rem; font-size: 0.875rem; font-weight: 500; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+        .difficulty-btn:hover { transform: translateY(-2px); }
+        .difficulty-btn-active { color: white; font-weight: 600; }
+
+        /* --- Drag and Drop Styles --- */
+        .word-bank-word { cursor: grab; transition: background-color 0.2s ease; }
+        .word-bank-word:active { cursor: grabbing; background-color: #d1fae5; }
+        .sentence-drop-zone { min-height: 50px; border-style: dashed; transition: background-color 0.2s ease, border-color 0.2s ease; }
+        .sentence-drop-zone.drag-over { background-color: #e0f2fe; border-color: #38bdf8; }
+        .dropped-word { cursor: pointer; margin: 2px; display: inline-block; transition: opacity 0.2s ease; }
+        .dropped-word:hover { opacity: 0.7; }
+
+        /* --- Typing Game Styles --- */
+        #typing-input.input-error { border-color: #ef4444; animation: inputErrorShake 0.4s ease-in-out; }
+
+        /* --- Grammar Quiz Styles --- */
+        .grammar-option { cursor: pointer; transition: background-color 0.2s ease, border-color 0.2s ease; border: 2px solid transparent; }
+        .grammar-option.selected { background-color: #e0e7ff; border-color: #6366f1; font-weight: 600; }
+        .grammar-blank { display: inline-block; width: 50px; border-bottom: 2px solid #6b7280; margin: 0 4px; vertical-align: baseline; }
+
+        /* --- Phrase Check Styles --- */
+        .phrase-check-button { padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; transition: background-color 0.2s ease, transform 0.2s ease; }
+        .phrase-check-button:hover { transform: translateY(-2px); }
+
+        /* --- General --- */
+        .game-play-area { transition: border-color 0.3s ease; }
+        .streak-highscore-display { position: absolute; top: 4px; left: 4px; font-size: 0.75rem; color: #4b5563; }
+
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center p-4">
+
+    <div class="w-full max-w-4xl bg-white rounded-lg shadow-xl p-6 md:p-8 relative">
+        <h1 class="text-2xl md:text-3xl font-bold text-center text-emerald-700 mb-6">Bonjour Bootcamp Game Hub</h1>
+
+        <div class="absolute top-4 right-4 text-right">
+            <div id="streak-counter">
+                <span id="streak-icon" class="text-xl md:text-2xl"></span>
+                <span id="streak-value" class="text-sm md:text-base font-semibold text-gray-700 ml-1">0</span>
+                <span class="text-xs text-gray-500 block">Current Streak</span>
+            </div>
+        </div>
+
+
+        <div class="mb-6 border-b border-gray-200">
+            <div class="w-full overflow-x-visible">
+                <nav class="flex justify-center flex-wrap space-x-1" aria-label="Tabs">
+                    <button id="tab-vocab" onclick="switchTab('vocab')" class="tab tab-active whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm rounded-t-md focus:outline-none">
+                        📚 Le Mot Juste
+                    </button>
+                    <button id="tab-sentence" onclick="switchTab('sentence')" class="tab text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm rounded-t-md focus:outline-none">
+                        ✍️ Phrase Crafter
+                    </button>
+                    <button id="tab-story" onclick="switchTab('story')" class="tab text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm rounded-t-md focus:outline-none">
+                        🗺️ French Adventure
+                    </button>
+                    <button id="tab-typing" onclick="switchTab('typing')" class="tab text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm rounded-t-md focus:outline-none">
+                        ⌨️ Typing Challenge
+                    </button>
+                    <button id="tab-grammar" onclick="switchTab('grammar')" class="tab text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm rounded-t-md focus:outline-none">
+                        🧐 Grammar Quiz
+                    </button>
+                    <button id="tab-phraseCheck" onclick="switchTab('phraseCheck')" class="tab text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm rounded-t-md focus:outline-none">
+                        ✅ Phrase Check
+                    </button>
+                </nav>
+            </div>
+        </div>
+
+        <div id="game-content">
+            <div id="vocab-game" class="game-area relative"> <div class="streak-highscore-display">Streak HS: <span id="streak-highscore-vocab">0</span></div> <h2 class="text-xl font-semibold text-gray-800 mb-4 pt-4">Le Mot Juste - Vocabulary Builder</h2> <div class="mb-6 flex justify-center space-x-2"> <button onclick="loadGame('vocab', 'novice')" class="difficulty-btn difficulty-btn-active bg-emerald-500 hover:bg-emerald-600" data-game="vocab" data-difficulty="novice">Novice</button> <button onclick="loadGame('vocab', 'intermediate')" class="difficulty-btn bg-gray-200 hover:bg-gray-300 text-gray-700" data-game="vocab" data-difficulty="intermediate">Intermediate</button> <button onclick="loadGame('vocab', 'advanced')" class="difficulty-btn bg-gray-200 hover:bg-gray-300 text-gray-700" data-game="vocab" data-difficulty="advanced">Advanced</button> </div> <div id="vocab-game-play" class="game-play-area bg-emerald-50 p-4 rounded-lg border border-emerald-200 min-h-[250px] flex flex-col items-center justify-center"> <p class="text-lg font-medium text-gray-700 mb-4">Translate this English word:</p> <p id="vocab-english-word" class="text-2xl font-bold text-emerald-800 mb-6"></p> <div id="vocab-options" class="grid grid-cols-2 md:grid-cols-3 gap-3 w-full max-w-lg"></div> </div> <div id="feedback-area-vocab" class="mt-4 p-3 rounded-md text-center text-sm font-medium feedback-animation min-h-[50px]"></div> </div>
+             <div id="sentence-game" class="game-area hidden relative"> <div class="streak-highscore-display">Streak HS: <span id="streak-highscore-sentence">0</span></div> <h2 class="text-xl font-semibold text-gray-800 mb-4 pt-4">Phrase Crafter - Sentence Construction</h2> <div class="mb-6 flex justify-center space-x-2"> <button onclick="loadGame('sentence', 'novice')" class="difficulty-btn difficulty-btn-active bg-blue-500 hover:bg-blue-600" data-game="sentence" data-difficulty="novice">Novice</button> <button onclick="loadGame('sentence', 'intermediate')" class="difficulty-btn bg-gray-200 hover:bg-gray-300 text-gray-700" data-game="sentence" data-difficulty="intermediate">Intermediate</button> <button onclick="loadGame('sentence', 'advanced')" class="difficulty-btn bg-gray-200 hover:bg-gray-300 text-gray-700" data-game="sentence" data-difficulty="advanced">Advanced</button> </div> <div id="sentence-game-play" class="game-play-area bg-blue-50 p-4 rounded-lg border border-blue-200 min-h-[250px]"> <p class="text-lg font-medium text-gray-700 mb-2">Translate this English sentence:</p> <p id="sentence-english-prompt" class="text-xl font-semibold text-blue-800 mb-4"></p> <p class="text-sm text-gray-600 mb-4">Drag the French words into the box below in the correct order.</p> <div id="sentence-drop-zone" class="sentence-drop-zone border-2 border-gray-300 rounded-md p-3 mb-4 bg-white flex flex-wrap items-center" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)"> <span class="text-gray-400 italic">Drop words here...</span> </div> <p class="text-sm text-gray-600 mb-2">Available words:</p> <div id="sentence-word-bank" class="flex flex-wrap gap-2 mb-4"></div> <button id="sentence-check-button" onclick="checkSentenceAnswer()" class="mt-4 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-5 rounded-md shadow transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed" disabled>Check Answer</button> </div> <div id="feedback-area-sentence" class="mt-4 p-3 rounded-md text-center text-sm font-medium feedback-animation min-h-[50px]"></div> </div>
+             <div id="story-game" class="game-area hidden relative"> <div class="streak-highscore-display">Streak HS: <span id="streak-highscore-story">0</span></div> <h2 class="text-xl font-semibold text-gray-800 mb-4 pt-4">French Adventure - Interactive Story</h2> <div class="mb-6 flex justify-center space-x-2"> <button onclick="loadGame('story', 'novice')" class="difficulty-btn difficulty-btn-active bg-purple-500 hover:bg-purple-600" data-game="story" data-difficulty="novice">Novice</button> <button onclick="loadGame('story', 'intermediate')" class="difficulty-btn bg-gray-200 hover:bg-gray-300 text-gray-700" data-game="story" data-difficulty="intermediate">Intermediate</button> <button onclick="loadGame('story', 'advanced')" class="difficulty-btn bg-gray-200 hover:bg-gray-300 text-gray-700" data-game="story" data-difficulty="advanced">Advanced</button> </div> <div id="story-game-play" class="game-play-area bg-purple-50 p-4 rounded-lg border border-purple-200 min-h-[250px] flex flex-col justify-between"> <div><p id="story-scene-text" class="text-lg text-gray-800 mb-6 whitespace-pre-wrap"></p></div> <div id="story-choices" class="flex flex-col sm:flex-row gap-3 justify-center mt-4"></div> </div> <div id="feedback-area-story" class="mt-4 p-3 rounded-md text-center text-sm font-medium feedback-animation min-h-[50px]"></div> </div>
+             <div id="typing-game" class="game-area hidden relative"> <h2 class="text-xl font-semibold text-gray-800 mb-4">Typing Challenge</h2> <div class="mb-6 flex justify-center space-x-2"> <button onclick="loadGame('typing', 'novice')" class="difficulty-btn difficulty-btn-active bg-yellow-500 hover:bg-yellow-600" data-game="typing" data-difficulty="novice">Novice</button> <button onclick="loadGame('typing', 'intermediate')" class="difficulty-btn bg-gray-200 hover:bg-gray-300 text-gray-700" data-game="typing" data-difficulty="intermediate">Intermediate</button> <button onclick="loadGame('typing', 'advanced')" class="difficulty-btn bg-gray-200 hover:bg-gray-300 text-gray-700" data-game="typing" data-difficulty="advanced">Advanced</button> </div> <div id="typing-game-play" class="game-play-area bg-yellow-50 p-4 rounded-lg border border-yellow-200 min-h-[250px] flex flex-col items-center"> <div class="w-full flex justify-between items-center mb-4"> <div class="text-left"> <span class="text-sm font-medium text-yellow-700">High Score:</span> <span id="typing-highscore" class="text-lg font-bold text-yellow-900">0</span> </div> <div class="text-right"> <span class="text-sm font-medium text-yellow-700">Score:</span> <span id="typing-score" class="text-lg font-bold text-yellow-900">0</span> </div> </div> <div class="mb-4"> <span class="text-sm font-medium text-gray-600">Time Left:</span> <span id="typing-timer" class="text-2xl font-bold text-red-600">60</span>s </div> <div id="typing-word-display" class="text-3xl font-mono font-bold text-gray-800 my-6 p-3 bg-white rounded-md shadow min-h-[50px] flex items-center justify-center w-full max-w-md"> Press Start! </div> <input type="text" id="typing-input" class="w-full max-w-md p-3 border border-gray-300 rounded-md shadow-sm text-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 disabled:bg-gray-100" placeholder="Type the word here..." disabled autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"> <button id="typing-start-button" onclick="startTypingGame()" class="mt-6 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out text-lg"> Start Game </button> </div> <div id="feedback-area-typing" class="mt-4 p-3 rounded-md text-center text-sm font-medium feedback-animation min-h-[50px]"></div> </div>
+             <div id="grammar-game" class="game-area hidden relative"> <div class="streak-highscore-display">Streak HS: <span id="streak-highscore-grammar">0</span></div> <h2 class="text-xl font-semibold text-gray-800 mb-4 pt-4">Grammar Quiz</h2> <div class="mb-6 flex justify-center space-x-2"> <button onclick="loadGame('grammar', 'novice')" class="difficulty-btn difficulty-btn-active bg-indigo-500 hover:bg-indigo-600" data-game="grammar" data-difficulty="novice">Novice</button> <button onclick="loadGame('grammar', 'intermediate')" class="difficulty-btn bg-gray-200 hover:bg-gray-300 text-gray-700" data-game="grammar" data-difficulty="intermediate">Intermediate</button> <button onclick="loadGame('grammar', 'advanced')" class="difficulty-btn bg-gray-200 hover:bg-gray-300 text-gray-700" data-game="grammar" data-difficulty="advanced">Advanced</button> </div> <div id="grammar-game-play" class="game-play-area bg-indigo-50 p-4 rounded-lg border border-indigo-200 min-h-[250px] flex flex-col items-center justify-center"> <p class="text-lg font-medium text-gray-700 mb-6 text-center">Choose the correct word to fill the blank:</p> <div id="grammar-sentence-display" class="text-2xl font-semibold text-indigo-800 mb-8 text-center"> <span id="grammar-sentence-part1"></span><span class="grammar-blank"></span><span id="grammar-sentence-part2"></span> </div> <ul id="grammar-options" class="flex flex-wrap justify-center gap-4 w-full max-w-md" tabindex="0"></ul> </div> <div id="feedback-area-grammar" class="mt-4 p-3 rounded-md text-center text-sm font-medium feedback-animation min-h-[50px]"></div> </div>
+             <div id="phraseCheck-game" class="game-area hidden relative"> <div class="streak-highscore-display">Streak HS: <span id="streak-highscore-phraseCheck">0</span></div> <h2 class="text-xl font-semibold text-gray-800 mb-4 pt-4">Phrase Check</h2> <div class="mb-6 flex justify-center space-x-2"> <button onclick="loadGame('phraseCheck', 'novice')" class="difficulty-btn difficulty-btn-active bg-teal-500 hover:bg-teal-600" data-game="phraseCheck" data-difficulty="novice">Novice</button> <button onclick="loadGame('phraseCheck', 'intermediate')" class="difficulty-btn bg-gray-200 hover:bg-gray-300 text-gray-700" data-game="phraseCheck" data-difficulty="intermediate">Intermediate</button> <button onclick="loadGame('phraseCheck', 'advanced')" class="difficulty-btn bg-gray-200 hover:bg-gray-300 text-gray-700" data-game="phraseCheck" data-difficulty="advanced">Advanced</button> </div> <div id="phraseCheck-game-play" class="game-play-area bg-teal-50 p-4 rounded-lg border border-teal-200 min-h-[250px] flex flex-col items-center justify-center"> <p class="text-lg font-medium text-gray-700 mb-6 text-center">Is this sentence grammatically correct?</p> <div id="phraseCheck-sentence-display" class="text-2xl font-semibold text-teal-800 mb-8 text-center p-4 bg-white rounded shadow min-h-[60px]"></div> <div class="flex space-x-6"> <button id="phraseCheck-correct-btn" onclick="checkPhraseAnswer(true)" class="phrase-check-button bg-green-500 hover:bg-green-600 text-white">✅ Oui</button> <button id="phraseCheck-incorrect-btn" onclick="checkPhraseAnswer(false)" class="phrase-check-button bg-red-500 hover:bg-red-600 text-white">❌ Non</button> </div> </div> <div id="feedback-area-phraseCheck" class="mt-4 p-3 rounded-md text-center text-sm font-medium feedback-animation min-h-[50px]"></div> </div>
+
+        </div>
+    </div>
+
+    <script>
+        // --- Game Data (Expanded Content) ---
+        const gameData = {
+             vocab: { // Expanded vocabulary lists
+                novice: [
+                    { english: 'Cat', french: 'Le chat', options: ['Le chien'], explanation: "'Le chat' means cat." },
+                    { english: 'Dog', french: 'Le chien', options: ['Le chat'], explanation: "'Le chien' means dog." },
+                    { english: 'House', french: 'La maison', options: ['La voiture'], explanation: "'La maison' means house." },
+                    { english: 'Car', french: 'La voiture', options: ['La maison'], explanation: "'La voiture' means car." },
+                    { english: 'Red', french: 'Rouge', options: ['Bleu'], explanation: "'Rouge' means red." },
+                    { english: 'Blue', french: 'Bleu', options: ['Vert'], explanation: "'Bleu' means blue." },
+                    { english: 'Green', french: 'Vert', options: ['Jaune'], explanation: "'Vert' means green." },
+                    { english: 'To Eat', french: 'Manger', options: ['Boire'], explanation: "'Manger' means to eat." },
+                    { english: 'To Drink', french: 'Boire', options: ['Manger'], explanation: "'Boire' means to drink." },
+                    { english: 'Hello', french: 'Bonjour', options: ['Merci'], explanation: "'Bonjour' means hello." },
+                    { english: 'Thank you', french: 'Merci', options: ['Au revoir'], explanation: "'Merci' means thank you." },
+                    { english: 'Goodbye', french: 'Au revoir', options: ['Bonjour'], explanation: "'Au revoir' means goodbye." },
+                    { english: 'Yes', french: 'Oui', options: ['Non'], explanation: "'Oui' means yes." },
+                    { english: 'No', french: 'Non', options: ['Oui'], explanation: "'Non' means no." },
+                    { english: 'Water', french: "L'eau", options: ["Le lait"], explanation: "'L'eau' (f) means water." },
+                    { english: 'Bread', french: 'Le pain', options: ['Le fromage'], explanation: "'Le pain' means bread." }
+                ],
+                intermediate: [
+                    { english: 'To Speak', french: 'Parler', options: ['Écouter', 'Regarder', 'Lire'], explanation: "'Parler' means to speak." },
+                    { english: 'To Listen', french: 'Écouter', options: ['Parler', 'Voir', 'Entendre'], explanation: "'Écouter' means to listen." },
+                    { english: 'To Watch', french: 'Regarder', options: ['Voir', 'Écouter', 'Observer'], explanation: "'Regarder' means to watch (actively)." },
+                    { english: 'To Read', french: 'Lire', options: ['Écrire', 'Parler', 'Compter'], explanation: "'Lire' means to read." },
+                    { english: 'Happy (m)', french: 'Content', options: ['Triste', 'Fatigué', 'Fâché'], explanation: "'Content' means happy/satisfied." },
+                    { english: 'Sad (f)', french: 'Triste', options: ['Contente', 'Joyeuse', 'Ennuyée'], explanation: "'Triste' means sad (same for m/f)." },
+                    { english: 'Tired (m)', french: 'Fatigué', options: ['Énergique', 'Reposé', 'Malade'], explanation: "'Fatigué' means tired." },
+                    { english: 'Tomorrow', french: 'Demain', options: ['Hier', 'Aujourd\'hui', 'Maintenant'], explanation: "'Demain' means tomorrow." },
+                    { english: 'Yesterday', french: 'Hier', options: ['Demain', 'Avant-hier', 'Après-demain'], explanation: "'Hier' means yesterday." },
+                    { english: 'Today', french: 'Aujourd\'hui', options: ['Maintenant', 'Demain', 'Hier'], explanation: "'Aujourd'hui' means today." },
+                    { english: 'Expensive', french: 'Cher', options: ['Bon marché', 'Gratuit', 'Nouveau'], explanation: "'Cher' means expensive." },
+                    { english: 'Cheap', french: 'Bon marché', options: ['Cher', 'Coûteux', 'Inestimable'], explanation: "'Bon marché' means cheap/good value." },
+                    { english: 'Train', french: 'Le train', options: ["L'avion", "Le bus", "Le vélo"], explanation: "'Le train' means the train." },
+                    { english: 'Market', french: 'Le marché', options: ['Le magasin', 'La boutique', "L'épicerie"], explanation: "'Le marché' means the market." },
+                    { english: 'To Want', french: 'Vouloir', options: ['Pouvoir', 'Devoir', 'Savoir'], explanation: "'Vouloir' means to want." },
+                    { english: 'To Be Able To', french: 'Pouvoir', options: ['Vouloir', 'Savoir', 'Falloir'], explanation: "'Pouvoir' means to be able to (can)." }
+                ],
+                advanced: [
+                     { english: 'To Achieve', french: 'Atteindre', options: ['Échouer', 'Essayer', 'Abandonner', 'Commencer', 'Finir', 'Espérer', 'Croire', 'Rêver'], explanation: "'Atteindre' means to achieve/reach." },
+                     { english: 'To Fail', french: 'Échouer', options: ['Réussir', 'Atteindre', 'Gagner', 'Perdre', 'Tenter', 'Manquer', 'Rater', 'Abandonner'], explanation: "'Échouer' means to fail." },
+                     { english: 'Nevertheless', french: 'Néanmoins', options: ['Cependant', 'Pourtant', 'Malgré', 'Donc', 'Alors', 'Ensuite', 'Finalement', 'Autrefois'], explanation: "'Néanmoins' means nevertheless." },
+                     { english: 'However', french: 'Cependant', options: ['Néanmoins', 'Pourtant', 'Quoique', 'Bien que', 'Malgré', 'Sauf', 'Selon', 'Puisque'], explanation: "'Cependant' means however/yet." },
+                     { english: 'Skillful', french: 'Adroit', options: ['Maladroit', 'Compétent', 'Capable', 'Intelligent', 'Rapide', 'Fort', 'Prudent', 'Timide'], explanation: "'Adroit' means skillful/dexterous." },
+                     { english: 'Clumsy', french: 'Maladroit', options: ['Adroit', 'Agile', 'Souple', 'Habile', 'Gaucher', 'Inepte', 'Lent', 'Prudent'], explanation: "'Maladroit' means clumsy/awkward." },
+                     { english: 'Development', french: 'Le développement', options: ['La croissance', "L'amélioration", 'Le progrès', "L'évolution", "La stagnation", "Le déclin", "La construction", "La recherche"], explanation: "'Le développement' means development." },
+                     { english: 'Environment', french: "L'environnement", options: ['Le milieu', 'La nature', 'Le climat', 'Le paysage', 'La pollution', "L'écologie", "L'atmosphère", "La planète"], explanation: "'L'environnement' (m) means environment." },
+                     { english: 'Government', french: 'Le gouvernement', options: ["L'état", "L'administration", 'Le régime', 'Le pouvoir', "La politique", "La nation", "Le peuple", "Le ministère"], explanation: "'Le gouvernement' means government." },
+                     { english: 'Responsibility', french: 'La responsabilité', options: ['Le devoir', "L'obligation", "L'engagement", 'La charge', 'La faute', "L'initiative", "L'autorité", "La confiance"], explanation: "'La responsabilité' means responsibility." },
+                     { english: 'Although', french: 'Bien que', options: ['Quoique', 'Malgré', 'Pourtant', 'Comme', 'Si', 'Quand', 'Depuis', 'Pendant'], explanation: "'Bien que' (+ subjunctive) means although." },
+                     { english: 'To Doubt', french: 'Douter', options: ['Croire', 'Penser', 'Savoir', 'Supposer', 'Espérer', 'Craindre', 'Se méfier', 'Questionner'], explanation: "'Douter' means to doubt." }
+                ]
+             },
+             sentence: { // Expanded sentence lists
+                novice: [
+                    { english: 'The cat is black', words: ['Le', 'chat', 'est', 'noir'], correct: 'Le chat est noir', explanation: "Basic Subject-Verb-Adjective structure." },
+                    { english: 'I eat an apple', words: ['Je', 'mange', 'une', 'pomme'], correct: 'Je mange une pomme', explanation: "Subject-Verb-Object structure. 'une' for feminine nouns." },
+                    { english: 'She drinks water', words: ['Elle', 'boit', 'de', "l'eau"], correct: "Elle boit de l'eau", explanation: "'boit' = she drinks, 'de l'eau' = (some) water." },
+                    { english: 'We have a dog', words: ['Nous', 'avons', 'un', 'chien'], correct: 'Nous avons un chien', explanation: "'avons' = we have." },
+                    { english: 'They are happy (m)', words: ['Ils', 'sont', 'contents'], correct: 'Ils sont contents', explanation: "'sont' = they are. 'contents' = happy (masc. plural)." },
+                    { english: 'The house is big', words: ['La', 'maison', 'est', 'grande'], correct: 'La maison est grande', explanation: "'grande' = big (feminine)." },
+                    { english: 'You speak French', words: ['Tu', 'parles', 'français'], correct: 'Tu parles français', explanation: "'parles' = you (informal) speak." },
+                    { english: 'He likes bread', words: ['Il', 'aime', 'le', 'pain'], correct: 'Il aime le pain', explanation: "Use 'le' with 'aimer' (to like)." }
+                ],
+                intermediate: [
+                    { english: 'We are going to the market tomorrow', words: ['Nous', 'allons', 'au', 'marché', 'demain'], correct: 'Nous allons au marché demain', explanation: "Future proche. 'au' = à + le." },
+                    { english: 'Do you want to watch this movie?', words: ['Veux', 'tu', 'regarder', 'ce', 'film', '?'], correct: 'Veux tu regarder ce film ?', explanation: "Inverted question. 'ce' for masculine nouns." },
+                    { english: 'They (f) finished their homework', words: ['Elles', 'ont', 'fini', 'leurs', 'devoirs'], correct: 'Elles ont fini leurs devoirs', explanation: "Passé composé. 'Elles' (fem. plural), 'leurs' (plural possessive)." },
+                    { english: 'I listened to the radio this morning', words: ['Ce', 'matin', ',', "j'ai", 'écouté', 'la', 'radio'], correct: "Ce matin , j'ai écouté la radio", explanation: "Passé composé with 'avoir'." },
+                    { english: 'She has bought beautiful flowers', words: ['Elle', 'a', 'acheté', 'de', 'belles', 'fleurs'], correct: 'Elle a acheté de belles fleurs', explanation: "'de' replaces 'des' before a plural adjective ('belles')." },
+                    { english: 'He gave me a gift', words: ['Il', 'm\'a', 'donné', 'un', 'cadeau'], correct: "Il m'a donné un cadeau", explanation: "Passé composé. 'm'a donné' = gave me." },
+                    { english: 'You (formal) must leave now', words: ['Vous', 'devez', 'partir', 'maintenant'], correct: 'Vous devez partir maintenant', explanation: "'devez' = you (formal) must. 'partir' = to leave." },
+                    { english: 'It was raining when I woke up', words: ['Il', 'pleuvait', 'quand', 'je', 'me', 'suis', 'réveillé(e)'], correct: 'Il pleuvait quand je me suis réveillé(e)', explanation: "Imparfait ('pleuvait') for background action, Passé composé ('me suis réveillé') for specific event." }
+                ],
+                advanced: [
+                    { english: 'Although it was raining, he went out', words: ['Bien', "qu'il", 'pleuvait', ',', 'il', 'est', 'sorti'], correct: "Bien qu'il pleuvait , il est sorti", explanation: "Subjunctive often follows 'Bien que'. Passé composé." },
+                    { english: 'She would have preferred that you call her', words: ['Elle', 'aurait', 'préféré', 'que', 'tu', "l'", 'appelles'], correct: "Elle aurait préféré que tu l'appelles", explanation: "Conditional perfect + subjunctive." },
+                    { english: 'The book whose author I met was interesting', words: ['Le', 'livre', 'dont', "j'ai", 'rencontré', "l'auteur", 'était', 'intéressant'], correct: "Le livre dont j'ai rencontré l'auteur était intéressant", explanation: "Relative pronoun 'dont'." },
+                    { english: 'Having finished work, she went home', words: ['Ayant', 'fini', 'le', 'travail', ',', 'elle', 'est', 'rentrée', 'chez', 'elle'], correct: 'Ayant fini le travail , elle est rentrée chez elle', explanation: "Present participle compound ('Ayant fini') used as an introductory clause." },
+                    { english: 'He asked me if I knew where she lived', words: ['Il', 'm\'a', 'demandé', 'si', 'je', 'savais', 'où', 'elle', 'habitait'], correct: "Il m'a demandé si je savais où elle habitait", explanation: "Indirect speech. Tenses shift back (present -> imperfect)." },
+                    { english: 'Whatever you do, do it well', words: ['Quoi', 'que', 'tu', 'fasses', ',', 'fais', 'le', 'bien'], correct: 'Quoi que tu fasses , fais le bien', explanation: "'Quoi que' requires the subjunctive ('fasses'). Imperative 'fais'." },
+                    { english: 'It seems that he has not understood', words: ['Il', 'semble', "qu'il", "n'ait", 'pas', 'compris'], correct: "Il semble qu'il n'ait pas compris", explanation: "'Il semble que' requires the subjunctive ('ait compris')." },
+                    { english: 'They warned us not to be late', words: ['Ils', 'nous', 'ont', 'prévenus', 'de', 'ne', 'pas', 'être', 'en', 'retard'], correct: 'Ils nous ont prévenus de ne pas être en retard', explanation: "'Prévenir de faire qqc'. Negation 'ne pas' before infinitive." }
+                ]
+             },
+             story: { // Revised Story Content
+                novice: { // English Setup, French Choices
+                    start: { text: "You arrive at the French bakery. It smells wonderful!\nWhat do you want to do?", choices: [ { text: "Dire bonjour (Say hello)", next: 'greet' }, { text: "Regarder les gâteaux (Look at the cakes)", next: 'look_cakes' } ] },
+                    greet: { text: "You say 'Bonjour!' to the baker. They smile.\nBaker: 'Bonjour! Qu'est-ce que je vous sers?' (Hello! What can I get for you?)", choices: [ { text: "Une baguette, s'il vous plaît.", next: 'ask_bread' }, { text: "Un croissant, s'il vous plaît.", next: 'ask_croissant'} ] },
+                    look_cakes: { text: "The cakes look delicious, especially the chocolate éclair!\nWhat now?", choices: [ { text: "Un éclair au chocolat, s'il vous plaît.", next: 'ask_eclair' }, { text: "Dire bonjour maintenant (Say hello now)", next: 'greet' } ] },
+                    ask_bread: { text: "The baker hands you a perfect baguette.\nBaker: 'Voilà! Anything else?' ('Autre chose?')", choices: [ { text: "Non, merci!", next: 'end_thanks'} ] },
+                    ask_croissant: { text: "The baker gives you a flaky croissant.\nBaker: 'Et voilà! Anything else?' ('Autre chose?')", choices: [ { text: "Non, merci!", next: 'end_thanks'} ] },
+                    ask_eclair: { text: "The baker boxes up the éclair.\nBaker: 'Excellent choice! Anything else?' ('Autre chose?')", choices: [ { text: "Non, merci!", next: 'end_thanks'} ] },
+                    end_thanks: { text: "You say 'Merci beaucoup!' and leave the bakery.\nAdventure complete!", choices: [ { text: "Rejouer (Play Again)", next: 'start'} ] }
+                },
+                 intermediate: { // Mix of English and French
+                    start: { text: "Vous êtes à la gare (You are at the train station). You need a ticket to Lyon.\nOù allez-vous (Where are you going)?", choices: [ { text: "Au guichet (To the counter)", next: 'counter' }, { text: "Au distributeur (To the machine)", next: 'machine' } ] },
+                    counter: { text: "L'agent demande (The agent asks): 'Bonjour, vous allez où?'", choices: [ { text: "Répondre: 'À Lyon'", next: 'ask_time' }, { text: "Demander: 'Est-ce le bon guichet?'", next: 'confirm_counter'} ] },
+                    machine: { text: "The ticket machine shows destinations. You see 'Lyon Part-Dieu'.", choices: [ { text: "Sélectionner 'Lyon Part-Dieu'", next: 'select_lyon' }, { text: "Chercher de l'aide (Look for help)", next: 'find_help'} ] },
+                    ask_time: { text: "Agent: 'D'accord. Aller simple ou aller-retour?' (Okay. One way or round trip?)", choices: [ { text: "'Aller simple'", next: 'pay_counter' }, { text: "'Aller-retour'", next: 'pay_counter'} ] },
+                    confirm_counter: { text: "Agent: 'Oui, pour Lyon, c'est ici.' (Yes, for Lyon, it's here.)", choices: [ { text: "Dire: 'À Lyon'", next: 'ask_time' } ] },
+                    select_lyon: { text: "La machine demande: 'Aller simple ou Aller-retour?'", choices: [ { text: "Choisir 'Aller simple'", next: 'pay_machine' }, { text: "Choisir 'Aller-retour'", next: 'pay_machine'} ] },
+                    find_help: { text: "You find an information desk ('un bureau d'information'). They direct you to the counter.", choices: [ { text: "Aller au guichet", next: 'counter'} ] },
+                    pay_counter: { text: "L'agent vous dit le prix. You pay and get your ticket.", choices: [ { text: "Dire 'Merci'", next: 'end_success'} ] },
+                    pay_machine: { text: "La machine affiche le prix. You insert your card and receive the ticket.", choices: [ { text: "Prendre le billet", next: 'end_success'} ] },
+                    end_success: { text: "Vous avez votre billet pour Lyon! Trouvez le quai (Find the platform).\nAdventure complete!", choices: [ { text: "Rejouer", next: 'start'} ] }
+                 },
+                 advanced: { // All French
+                    start: { text: "Vous entrez au Musée du Louvre, vaste et imposant. Votre but est de trouver La Joconde. Les panneaux offrent des directions.", choices: [ { text: "Suivre 'Peintures Italiennes'", next: 'follow_italian' }, { text: "Demander à un employé", next: 'ask_employee' }, { text: "Aller vers l'aile Denon", next: 'wander_denon'} ] },
+                    follow_italian: { text: "Vous naviguez à travers des galeries remplies de chefs-d'œuvre de la Renaissance. La foule s'épaissit.", choices: [ { text: "Continuer à suivre les panneaux", next: 'near_mona_lisa' }, { text: "Faire un détour par les antiquités égyptiennes", next: 'egyptian_detour'} ] },
+                    ask_employee: { text: "Vous demandez poliment : 'Excusez-moi, où se trouve La Joconde ?' L'employé répond : 'Continuez tout droit, puis suivez les panneaux pour l'aile Denon, premier étage.'", choices: [ { text: "Remercier et suivre les directions", next: 'follow_directions' } ] },
+                    wander_denon: { text: "Vous vous trouvez dans l'impressionnante aile Denon, connue pour ses grands tableaux français et son art italien. Vous sentez que vous approchez.", choices: [ { text: "Chercher les panneaux 'La Joconde'", next: 'near_mona_lisa' }, { text: "Admirer 'Le Radeau de la Méduse'", next: 'admire_raft'} ] },
+                    near_mona_lisa: { text: "Vous voyez un grand panneau indiquant explicitement 'La Joconde'. Une foule importante est rassemblée plus loin.", choices: [ { text: "Rejoindre la foule", next: 'see_mona_lisa'} ] },
+                    egyptian_detour: { text: "La section égyptienne est fascinante, avec ses sarcophages et ses hiéroglyphes. Vous y passez un peu de temps avant de vous souvenir de votre objectif.", choices: [ { text: "Retourner chercher les panneaux 'Peintures Italiennes'", next: 'follow_italian'} ] },
+                    follow_directions: { text: "En suivant les instructions claires de l'employé, vous montez au premier étage de l'aile Denon et voyez bientôt les panneaux.", choices: [ { text: "Se diriger vers les panneaux", next: 'near_mona_lisa'} ] },
+                    admire_raft: { text: "Le tableau de Géricault est puissant et émouvant. Après l'avoir contemplé, vous vous reconcentrez sur votre quête.", choices: [ { text: "Chercher les panneaux 'La Joconde'", next: 'near_mona_lisa'} ] },
+                    see_mona_lisa: { text: "Enfin, vous la voyez ! Protégée derrière une vitre, plus petite que prévu, mais indéniablement La Joconde. Son sourire énigmatique vous captive.", choices: [ { text: "Mission accomplie !", next: 'end_success'} ] },
+                    end_success: { text: "Vous avez réussi à naviguer dans le Louvre pour trouver l'une des peintures les plus célèbres du monde.\nAventure terminée !", choices: [ { text: "Rejouer", next: 'start'} ] }
+                 }
+             },
+             typing: { // Expanded typing lists
+                novice: ['le', 'la', 'un', 'une', 'chat', 'chien', 'maison', 'bonjour', 'merci', 'oui', 'non', 'rouge', 'bleu', 'manger', 'boire', 'pain', 'eau', 'livre', 'table', 'pomme', 'banane', 'mer', 'ciel'],
+                intermediate: ['parler', 'écouter', 'regarder', 'content', 'triste', 'demain', 'hier', 'aujourd\'hui', 'voiture', 'train', 'marché', 'vouloir', 'pouvoir', 'aller', 'faire', 'acheter', 'vendre', 'chercher', 'trouver', 'fenêtre', 'porte', 'matin', 'soir', 'nuit'],
+                advanced: ['atteindre', 'néanmoins', 'adroit', 'maladroit', 'bien que', 'quoique', 'falloir', 'savoir', 'connaître', 'intéressant', 'préférer', 'développement', 'environnement', 'gouvernement', 'responsabilité', 'conscience', 'connaissance', 'malheureusement', 'cependant', 'améliorer', 'comprendre', 'expliquer', 'nécessaire', 'important']
+             },
+             grammar: { // Expanded grammar lists
+                novice: [
+                    { sentenceParts: ["C'est une bouteille ", " eau."], options: ["d'", "de l'", "à"], correct: "d'", explanation: "Use 'de' (contracted to d') for 'of' with quantities/containers." },
+                    { sentenceParts: ["Je vais ", " marché."], options: ["au", "à la", "aux"], correct: "au", explanation: "'Marché' is masculine, so 'à le' contracts to 'au'." },
+                    { sentenceParts: ["Il aime ", " chocolat."], options: ["le", "du", "un"], correct: "le", explanation: "Use definite article 'le/la/les' with verbs of preference (aimer, détester, préférer)." },
+                    { sentenceParts: ["Elle a ", " chien."], options: ["un", "le", "du"], correct: "un", explanation: "Use indefinite article 'un/une/des' to introduce a noun." },
+                    { sentenceParts: ["Nous mangeons ", " pain."], options: ["du", "le", "un"], correct: "du", explanation: "Use partitive article 'du/de la/de l'/des' for unspecified amounts ('some bread')." },
+                    { sentenceParts: ["Vous allez ", " France."], options: ["en", "au", "à"], correct: "en", explanation: "Use 'en' with feminine countries." },
+                    { sentenceParts: ["C'est ", " livre intéressant."], options: ["un", "le", "du"], correct: "un", explanation: "Use indefinite article 'un' here." },
+                    { sentenceParts: ["J'habite ", " Paris."], options: ["à", "en", "au"], correct: "à", explanation: "Use 'à' with cities." }
+                ],
+                intermediate: [
+                    { sentenceParts: ["Il hésite ", " partir."], options: ["à", "de", "pour"], correct: "à", explanation: "'hésiter à faire qqc'." },
+                    { sentenceParts: ["Merci ", " votre aide."], options: ["de", "pour", "à"], correct: "de", explanation: "'Merci de + noun'." },
+                    { sentenceParts: ["Elle a décidé ", " rester."], options: ["de", "à", "pour"], correct: "de", explanation: "'décider de faire qqc'." },
+                    { sentenceParts: ["Pensez ", " fermer la porte."], options: ["à", "de"], correct: "à", explanation: "'penser à faire qqc' (remember to do)." },
+                    { sentenceParts: ["Il parle ", " son voyage."], options: ["de", "à", "sur"], correct: "de", explanation: "'parler de qqc'." },
+                    { sentenceParts: ["J'ai besoin ", " dormir."], options: ["de", "à", "pour"], correct: "de", explanation: "'avoir besoin de qqc/faire qqc'." },
+                    { sentenceParts: ["Il continue ", " travailler."], options: ["à", "de"], correct: "à", explanation: "'continuer à faire qqc'." },
+                    { sentenceParts: ["Elle apprend ", " jouer du piano."], options: ["à", "de"], correct: "à", explanation: "'apprendre à faire qqc'." },
+                    { sentenceParts: ["Nous essayons ", " comprendre."], options: ["de", "à"], correct: "de", explanation: "'essayer de faire qqc'." }
+                ],
+                advanced: [
+                    { sentenceParts: ["Je me souviens ", " cette chanson."], options: ["de", "à"], correct: "de", explanation: "'se souvenir de qqc'." },
+                    { sentenceParts: ["Il réussit ", " résoudre le problème."], options: ["à", "de", "en"], correct: "à", explanation: "'réussir à faire qqc'." },
+                    { sentenceParts: ["Elle s'intéresse ", " l'art moderne."], options: ["à", "de", "en"], correct: "à", explanation: "'s'intéresser à qqc'." },
+                    { sentenceParts: ["Il est difficile ", " choisir."], options: ["de", "à"], correct: "de", explanation: "'Il est [adjectif] de faire qqc'." },
+                    { sentenceParts: ["Il risque ", " tomber."], options: ["de", "à"], correct: "de", explanation: "'risquer de faire qqc'." },
+                    { sentenceParts: ["Elle l'a empêché ", " partir."], options: ["de", "à"], correct: "de", explanation: "'empêcher qqn de faire qqc'." },
+                    { sentenceParts: ["Je vous conseille ", " lire ce livre."], options: ["de", "à"], correct: "de", explanation: "'conseiller (à qqn) de faire qqc'." },
+                    { sentenceParts: ["Il s'attend ", " recevoir une réponse."], options: ["à", "de"], correct: "à", explanation: "'s'attendre à qqc/recevoir qqc'." },
+                    { sentenceParts: ["Nous avons fini ", " manger."], options: ["de", "à"], correct: "de", explanation: "'finir de faire qqc'." }
+                ]
+             },
+             phraseCheck: { // Expanded phrase check lists
+                 novice: [
+                    { sentence: "Le chat est noir.", isCorrect: true, explanation: "Correct: Subject 'Le chat' (singular masculine) agrees with 'est' and 'noir'." },
+                    { sentence: "La maison sont grande.", isCorrect: false, correctVersion: "La maison est grande.", explanation: "Incorrect: Subject 'La maison' (singular feminine) needs 'est' (singular) and 'grande' (feminine)." },
+                    { sentence: "Ils mange la pomme.", isCorrect: false, correctVersion: "Ils mangent la pomme.", explanation: "Incorrect: Subject 'Ils' (plural) needs the verb form 'mangent'." },
+                    { sentence: "J'ai un voiture.", isCorrect: false, correctVersion: "J'ai une voiture.", explanation: "Incorrect: 'Voiture' is feminine, so it needs the article 'une'." },
+                    { sentence: "Nous allons au école.", isCorrect: false, correctVersion: "Nous allons à l'école.", explanation: "Incorrect: 'École' starts with a vowel, use 'à l'' instead of 'au' (à le)." },
+                    { sentence: "Les chiens est gentils.", isCorrect: false, correctVersion: "Les chiens sont gentils.", explanation: "Incorrect: Plural subject 'Les chiens' needs plural verb 'sont'." },
+                    { sentence: "Elle bois de l'eau.", isCorrect: false, correctVersion: "Elle boit de l'eau.", explanation: "Incorrect: Verb conjugation for 'elle' is 'boit'." },
+                    { sentence: "Tu parles anglais?", isCorrect: true, explanation: "Correct: Simple question structure." }
+                 ],
+                intermediate: [
+                    { sentence: "Si j'avais su, je viendrais.", isCorrect: false, correctVersion: "Si j'avais su, je serais venu(e).", explanation: "Incorrect: 'Si + pluperfect' requires the conditional perfect in the result clause." },
+                    { sentence: "Elle est le meilleur élève.", isCorrect: false, correctVersion: "Elle est la meilleure élève.", explanation: "Incorrect: Adjective 'meilleur' must agree in gender (feminine 'meilleure')." },
+                    { sentence: "Après être arrivé, il a mangé.", isCorrect: true, explanation: "Correct: Use the infinitive perfect ('être arrivé') after 'après'." },
+                    { sentence: "Je doute qu'il est ici.", isCorrect: false, correctVersion: "Je doute qu'il soit ici.", explanation: "Incorrect: The subjunctive mood ('soit') is required after 'douter que'." },
+                    { sentence: "C'est difficile à faire.", isCorrect: false, correctVersion: "C'est difficile de faire.", explanation: "Incorrect: Impersonal expressions like 'C'est difficile' usually take 'de' + infinitive." },
+                    { sentence: "Il faut que tu vas.", isCorrect: false, correctVersion: "Il faut que tu ailles.", explanation: "Incorrect: Subjunctive ('ailles') needed after 'il faut que'." },
+                    { sentence: "Nous avons beaucoup des amis.", isCorrect: false, correctVersion: "Nous avons beaucoup d'amis.", explanation: "Incorrect: Use 'de' (or d') instead of 'des' after 'beaucoup'." },
+                    { sentence: "Elle m'a dit qu'elle viendra.", isCorrect: true, explanation: "Correct: Future tense 'viendra' is acceptable in indirect speech if context implies future." }
+                ],
+                advanced: [
+                    { sentence: "Bien qu'il soit fatigué, il continue.", isCorrect: true, explanation: "Correct: The subjunctive mood ('soit') is correctly used after 'Bien que'." },
+                    { sentence: "Le livre que j'ai lu était intéressant.", isCorrect: true, explanation: "Correct: Past participle 'lu' does not agree because the direct object 'que' (referring to 'livre') comes before 'avoir'." },
+                    { sentence: "Les fleurs que j'ai vues étaient belles.", isCorrect: true, explanation: "Correct: Past participle 'vues' agrees with the preceding direct object 'que' (referring to 'fleurs', feminine plural)." },
+                    { sentence: "Il faut que nous faisons nos devoirs.", isCorrect: false, correctVersion: "Il faut que nous fassions nos devoirs.", explanation: "Incorrect: The subjunctive mood ('fassions') is required after 'Il faut que'." },
+                     { sentence: "Je l'ai empêché à partir.", isCorrect: false, correctVersion: "Je l'ai empêché de partir.", explanation: "Incorrect: The verb 'empêcher' takes the preposition 'de' before an infinitive." },
+                     { sentence: "Avant de partir, il a dit au revoir.", isCorrect: true, explanation: "Correct: Use infinitive after 'Avant de'." },
+                     { sentence: "Si elle aurait étudié, elle réussirait.", isCorrect: false, correctVersion: "Si elle avait étudié, elle aurait réussi.", explanation: "Incorrect: 'Si + pluperfect' requires conditional perfect. (Or 'Si + imperfect' requires conditional present)." },
+                     { sentence: "Supposant qu'il vienne, que ferons-nous?", isCorrect: true, explanation: "Correct: Present participle 'supposant' can introduce a clause, and 'vienne' (subjunctive) is often used after verbs of supposition." }
+                ]
+             }
+        };
+
+        // --- State Variables ---
+        let currentQuestionIndex = 0;
+        let currentLevelData = [];
+        let currentGameType = 'vocab';
+        let currentDifficulty = 'novice';
+        let currentStreak = 0;
+        let currentStoryScene = 'start';
+        let typingTimerInterval = null;
+        let typingTimeLeft = 60;
+        let currentTypingScore = 0;
+        let currentTypingWord = '';
+        let typingGameActive = false;
+        let typingHighScore = 0;
+        let selectedGrammarOptionIndex = 0;
+
+        // --- DOM Elements (Assigned in window.onload) ---
+        let tabButtons, gameAreas,
+            vocabGamePlayEl, vocabEnglishWordEl, vocabOptionsEl, feedbackAreaVocabEl,
+            sentenceGamePlayEl, sentenceEnglishPromptEl, sentenceDropZoneEl, sentenceWordBankEl, sentenceCheckButtonEl, feedbackAreaSentenceEl,
+            storyGamePlayEl, storySceneTextEl, storyChoicesEl, feedbackAreaStoryEl,
+            typingGamePlayEl, typingTimerEl, typingScoreEl, typingHighScoreEl, typingWordDisplayEl, typingInputEl, typingStartButtonEl, feedbackAreaTypingEl,
+            streakCounterEl, streakIconEl, streakValueEl,
+            grammarGamePlayEl, grammarSentencePart1El, grammarSentencePart2El, grammarOptionsEl, feedbackAreaGrammarEl,
+            phraseCheckGamePlayEl, phraseCheckSentenceDisplayEl, feedbackAreaPhraseCheckEl,
+            streakHsVocabEl, streakHsSentenceEl, streakHsStoryEl, streakHsGrammarEl, streakHsPhraseCheckEl;
+
+
+        // --- Utility Functions ---
+        function shuffleArray(array) { const c = [...array]; for (let i = c.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [c[i], c[j]] = [c[j], c[i]]; } return c; }
+        function getFeedbackElement() {
+             switch(currentGameType) {
+                case 'vocab': return feedbackAreaVocabEl;
+                case 'sentence': return feedbackAreaSentenceEl;
+                case 'story': return feedbackAreaStoryEl;
+                case 'typing': return feedbackAreaTypingEl;
+                case 'grammar': return feedbackAreaGrammarEl;
+                case 'phraseCheck': return feedbackAreaPhraseCheckEl;
+                default: return null;
+            }
+         }
+         function getGamePlayElement() {
+              switch(currentGameType) {
+                case 'vocab': return vocabGamePlayEl;
+                case 'sentence': return sentenceGamePlayEl;
+                case 'story': return storyGamePlayEl;
+                case 'typing': return typingGamePlayEl;
+                case 'grammar': return grammarGamePlayEl;
+                case 'phraseCheck': return phraseCheckGamePlayEl;
+                default: return null;
+            }
+          }
+
+        // --- Streak Functions ---
+        function updateStreakDisplay() {
+            if (!streakValueEl || !streakIconEl) return;
+            streakValueEl.textContent = currentStreak;
+            let icon = '🥚';
+            if (currentStreak >= 25) icon = '🌟'; else if (currentStreak >= 20) icon = '🏆'; else if (currentStreak >= 15) icon = '🏅'; else if (currentStreak >= 10) icon = '⭐'; else if (currentStreak >= 5) icon = '🌱';
+            streakIconEl.textContent = icon;
+            if (currentStreak > 0 && streakCounterEl) { streakCounterEl.classList.remove('streak-update-ping'); void streakCounterEl.offsetWidth; streakCounterEl.classList.add('streak-update-ping'); }
+         }
+        function incrementStreak() { if (['vocab', 'sentence', 'story', 'grammar', 'phraseCheck'].includes(currentGameType)) { currentStreak++; updateStreakDisplay(); updateStreakHighScore(); } }
+        function resetStreak() { if (currentStreak > 0) console.log("Streak reset!"); currentStreak = 0; updateStreakDisplay(); }
+        function getStreakHighScoreElement() {
+              switch(currentGameType) { case 'vocab': return streakHsVocabEl; case 'sentence': return streakHsSentenceEl; case 'story': return streakHsStoryEl; case 'grammar': return streakHsGrammarEl; case 'phraseCheck': return streakHsPhraseCheckEl; default: return null; }
+         }
+        function loadStreakHighScore() { const hsElement = getStreakHighScoreElement(); if (!hsElement) return; const storageKey = `streakHighScore_${currentGameType}_${currentDifficulty}`; const highScore = parseInt(localStorage.getItem(storageKey)) || 0; hsElement.textContent = highScore; }
+        function updateStreakHighScore() { const hsElement = getStreakHighScoreElement(); if (!hsElement) return; const storageKey = `streakHighScore_${currentGameType}_${currentDifficulty}`; let highScore = parseInt(localStorage.getItem(storageKey)) || 0; const STREAK_CAP = 100; let updated = false; if (currentStreak > highScore && currentStreak <= STREAK_CAP) { highScore = currentStreak; updated = true; } else if (currentStreak > STREAK_CAP && highScore < STREAK_CAP) { highScore = STREAK_CAP; updated = true; } if (updated) { localStorage.setItem(storageKey, highScore); hsElement.textContent = highScore; console.log(`Streak high score updated for ${storageKey}: ${highScore}`); hsElement.classList.add('text-yellow-500', 'font-bold'); setTimeout(() => hsElement.classList.remove('text-yellow-500', 'font-bold'), 1000); } }
+
+
+        // --- Feedback Functions ---
+        function showFeedback(message, type, explanation = '') { const feedbackEl = getFeedbackElement(); const gamePlayEl = getGamePlayElement(); if (!feedbackEl) return; feedbackEl.innerHTML = ''; feedbackEl.className = 'mt-4 p-3 rounded-md text-center text-sm font-medium feedback-animation min-h-[50px]'; if(gamePlayEl) { gamePlayEl.classList.remove('correct-answer-pulse', 'incorrect-answer-shake'); void gamePlayEl.offsetWidth; } let textClass = '', bgClass = ''; let animationClass = ''; if (type === 'correct') { textClass = 'text-emerald-800'; bgClass = 'bg-emerald-100'; animationClass = 'correct-answer-pulse'; feedbackEl.innerHTML = `<p>${message}</p>`; } else if (type === 'incorrect') { textClass = 'text-red-800'; bgClass = 'bg-red-100'; animationClass = 'incorrect-answer-shake'; feedbackEl.innerHTML = `<p class="font-semibold">${message}</p>`; if (explanation) feedbackEl.innerHTML += `<p class="mt-1 text-sm">${explanation}</p>`; } else if (type === 'info') { textClass = 'text-blue-800'; bgClass = 'bg-blue-100'; if (currentGameType === 'story') { textClass = 'text-purple-800'; bgClass = 'bg-purple-100'; } if (currentGameType === 'typing') { textClass = 'text-yellow-800'; bgClass = 'bg-yellow-100'; } if (currentGameType === 'grammar' || currentGameType === 'phraseCheck') { textClass = 'text-indigo-800'; bgClass = 'bg-indigo-100'; } feedbackEl.innerHTML = `<p>${message}</p>`; } feedbackEl.classList.add(bgClass, textClass); if (animationClass && gamePlayEl) { gamePlayEl.classList.add(animationClass); } }
+        function clearFeedback() { const feedbackEl = getFeedbackElement(); const gamePlayEl = getGamePlayElement(); if (feedbackEl) { feedbackEl.innerHTML = ''; feedbackEl.className = 'mt-4 p-3 rounded-md text-center text-sm font-medium feedback-animation min-h-[50px]'; } if (gamePlayEl) gamePlayEl.classList.remove('correct-answer-pulse', 'incorrect-answer-shake'); }
+
+
+        // --- Tab and Game Loading ---
+        function switchTab(gameType) {
+             if (typingGameActive && currentGameType === 'typing') endTypingGame(false);
+             window.removeEventListener('keydown', handleGrammarKeyDown);
+
+             resetStreak();
+             currentGameType = gameType;
+
+             if (tabButtons) {
+                 tabButtons.forEach(button => { button.classList.remove('tab-active', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300'); if (button.id === `tab-${gameType}`) button.classList.add('tab-active'); else button.classList.add('text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300'); });
+             }
+             if (gameAreas) {
+                 gameAreas.forEach(area => { if (area.id === `${gameType}-game`) area.classList.remove('hidden'); else area.classList.add('hidden'); });
+             }
+
+             const defaultDifficulty = 'novice';
+             setActiveDifficultyButton(gameType, defaultDifficulty);
+             loadGame(gameType, defaultDifficulty);
+         }
+
+        function setActiveDifficultyButton(gameType, difficulty) {
+             const gameAreaEl = document.getElementById(`${gameType}-game`); if (!gameAreaEl) return;
+             const difficultyButtons = gameAreaEl.querySelectorAll(`.difficulty-btn`);
+             difficultyButtons.forEach(btn => { btn.classList.remove('difficulty-btn-active', 'text-white'); btn.classList.add('bg-gray-200', 'hover:bg-gray-300', 'text-gray-700'); btn.classList.remove('bg-emerald-500', 'hover:bg-emerald-600', 'bg-blue-500', 'hover:bg-blue-600', 'bg-purple-500', 'hover:bg-purple-600', 'bg-yellow-500', 'hover:bg-yellow-600', 'bg-indigo-500', 'hover:bg-indigo-600', 'bg-teal-500', 'hover:bg-teal-600'); if (btn.dataset.difficulty === difficulty) { btn.classList.add('difficulty-btn-active'); btn.classList.remove('bg-gray-200', 'hover:bg-gray-300', 'text-gray-700'); if (gameType === 'vocab') btn.classList.add('bg-emerald-500', 'hover:bg-emerald-600'); else if (gameType === 'sentence') btn.classList.add('bg-blue-500', 'hover:bg-blue-600'); else if (gameType === 'story') btn.classList.add('bg-purple-500', 'hover:bg-purple-600'); else if (gameType === 'typing') btn.classList.add('bg-yellow-500', 'hover:bg-yellow-600'); else if (gameType === 'grammar') btn.classList.add('bg-indigo-500', 'hover:bg-indigo-600'); else if (gameType === 'phraseCheck') btn.classList.add('bg-teal-500', 'hover:bg-teal-600'); } });
+         }
+
+        function loadGame(gameType, difficulty) {
+            console.log(`Loading game: ${gameType}, Difficulty: ${difficulty}`);
+             if (typingGameActive) endTypingGame(false);
+             window.removeEventListener('keydown', handleGrammarKeyDown);
+
+            resetStreak();
+            currentGameType = gameType;
+            currentDifficulty = difficulty;
+            currentQuestionIndex = 0;
+            clearFeedback();
+            setActiveDifficultyButton(gameType, difficulty);
+            loadStreakHighScore();
+
+            let rawData;
+            if (['vocab', 'sentence', 'grammar', 'phraseCheck'].includes(gameType)) {
+                if (!gameData[gameType]) { console.error(`Game data for type "${gameType}" not found!`); currentLevelData = []; }
+                else { rawData = gameData[gameType][difficulty] || []; currentLevelData = shuffleArray(rawData); }
+                console.log("Shuffled questions for:", gameType, difficulty, currentLevelData.length);
+                 if (currentLevelData.length > 0) {
+                     currentQuestionIndex = 0;
+                     if (gameType === 'vocab') displayVocabQuestion();
+                     else if (gameType === 'sentence') displaySentenceQuestion();
+                     else if (gameType === 'grammar') displayGrammarQuestion();
+                     else if (gameType === 'phraseCheck') displayPhraseCheckQuestion();
+                 } else { /* Display coming soon based on game type */ displayComingSoonForType(gameType); }
+            } else if (gameType === 'story') {
+                 currentLevelData = gameData[gameType]?.[difficulty]; currentStoryScene = 'start';
+                 if (currentLevelData && currentLevelData[currentStoryScene]) displayStoryScene(); else displayComingSoonForType(gameType);
+            } else if (gameType === 'typing') {
+                 currentLevelData = gameData.typing?.[difficulty] || []; loadTypingGame();
+            } else { currentLevelData = null; console.error("Unknown game type:", gameType); }
+        }
+
+        // Helper for displayComingSoon logic
+        function displayComingSoonForType(type) {
+            if (type === 'vocab') displayComingSoon(vocabEnglishWordEl, vocabOptionsEl);
+            else if (type === 'sentence') displayComingSoon(sentenceEnglishPromptEl, sentenceWordBankEl);
+            else if (type === 'grammar') displayComingSoon(grammarSentencePart1El, grammarOptionsEl);
+            else if (type === 'phraseCheck') displayComingSoon(phraseCheckSentenceDisplayEl, null);
+            else if (type === 'story') displayComingSoon(storySceneTextEl, storyChoicesEl);
+            else if (type === 'typing') displayComingSoon(typingWordDisplayEl, null);
+        }
+
+         function displayComingSoon(promptEl, optionsEl) {
+             if (promptEl) promptEl.textContent = 'Coming Soon!';
+             if (optionsEl) optionsEl.innerHTML = '<p class="text-gray-500 col-span-full text-center">No content available for this level yet.</p>';
+             // Disable relevant buttons/inputs
+             if(currentGameType === 'sentence' && sentenceCheckButtonEl) sentenceCheckButtonEl.disabled = true;
+             if(currentGameType === 'story' && storyChoicesEl) storyChoicesEl.innerHTML = '';
+             if(currentGameType === 'typing') { if(typingWordDisplayEl) typingWordDisplayEl.textContent = 'Coming Soon!'; if(typingInputEl) typingInputEl.disabled = true; if(typingStartButtonEl) { typingStartButtonEl.disabled = true; typingStartButtonEl.classList.add('opacity-50', 'cursor-not-allowed'); } }
+             if(currentGameType === 'grammar') { if (grammarSentencePart1El) grammarSentencePart1El.textContent = 'Coming Soon!'; if(grammarSentencePart2El) grammarSentencePart2El.textContent = ''; if (grammarOptionsEl) grammarOptionsEl.innerHTML = '<p class="text-gray-500 col-span-full text-center">No content available for this level yet.</p>'; }
+             if(currentGameType === 'phraseCheck') { if (phraseCheckSentenceDisplayEl) phraseCheckSentenceDisplayEl.textContent = 'Coming Soon!'; const correctBtn = document.getElementById('phraseCheck-correct-btn'); const incorrectBtn = document.getElementById('phraseCheck-incorrect-btn'); if(correctBtn) correctBtn.disabled = true; if(incorrectBtn) incorrectBtn.disabled = true; }
+          }
+
+        // --- Vocab Game Functions ---
+        function displayVocabQuestion() {
+            clearFeedback();
+            if (!currentLevelData || currentLevelData.length === 0 || !vocabEnglishWordEl || !vocabOptionsEl) { displayComingSoonForType('vocab'); return; }
+            if (currentQuestionIndex >= currentLevelData.length) currentQuestionIndex = 0; // Should be handled by check fn, but safety first
+            const question = currentLevelData[currentQuestionIndex];
+            if (!question) { console.error("Vocab Error: Question null at index", currentQuestionIndex); loadGame(currentGameType, currentDifficulty); return; }
+
+            const optionsCount = { novice: 1, intermediate: 3, advanced: 8 };
+            const numOptionsToShow = optionsCount[currentDifficulty] || 1;
+            vocabEnglishWordEl.textContent = question.english;
+            vocabOptionsEl.innerHTML = '';
+            let options = [question.french];
+            // Ensure options exist and is an array before trying to access/shuffle
+            if (question.options && Array.isArray(question.options) && question.options.length > 0) {
+                 options = options.concat(shuffleArray([...question.options]).slice(0, numOptionsToShow));
+            }
+            options = shuffleArray(options); // Shuffle final list including correct answer
+
+            vocabOptionsEl.className = 'grid gap-3 w-full max-w-lg'; // Reset grid classes
+            if (options.length > 6) vocabOptionsEl.classList.add('md:grid-cols-3', 'grid-cols-3', 'max-w-xl');
+            else if (options.length > 4) vocabOptionsEl.classList.add('md:grid-cols-3', 'grid-cols-2', 'max-w-xl');
+            else vocabOptionsEl.classList.add('grid-cols-2', 'max-w-lg');
+
+            options.forEach(option => { const button = document.createElement('button'); button.textContent = option; button.className = 'w-full bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-700 font-medium py-3 px-4 rounded-md shadow-sm transition duration-150 ease-in-out'; button.onclick = () => checkVocabAnswer(option); vocabOptionsEl.appendChild(button); });
+         }
+        function checkVocabAnswer(selectedOption) {
+            // Cycle/Reshuffle Logic
+            if (!currentLevelData || currentLevelData.length === 0) return;
+            const question = currentLevelData[currentQuestionIndex];
+            if (!question) return;
+            if (selectedOption === question.french) { showFeedback('Correct! 🎉', 'correct'); incrementStreak(); currentQuestionIndex++; if (currentQuestionIndex >= currentLevelData.length) { console.log("Reshuffling vocab list..."); showFeedback("Reshuffling questions...", "info"); currentLevelData = shuffleArray(currentLevelData); currentQuestionIndex = 0; } setTimeout(displayVocabQuestion, 1200); }
+            else { showFeedback(`Incorrect. The answer is "${question.french}".`, 'incorrect', question.explanation); resetStreak(); }
+         }
+
+
+        // --- Sentence Game Functions ---
+        function displaySentenceQuestion() {
+             clearFeedback();
+             if (!sentenceDropZoneEl || !sentenceCheckButtonEl || !sentenceEnglishPromptEl || !sentenceWordBankEl) return;
+             sentenceDropZoneEl.innerHTML = '<span class="text-gray-400 italic">Drop words here...</span>';
+             sentenceCheckButtonEl.disabled = true;
+             if (!currentLevelData || currentLevelData.length === 0) { displayComingSoonForType('sentence'); return; }
+             if (currentQuestionIndex >= currentLevelData.length) currentQuestionIndex = 0;
+             const question = currentLevelData[currentQuestionIndex];
+             if (!question || !Array.isArray(question.words)) { console.error("Sentence Error: Invalid question data", currentQuestionIndex); loadGame(currentGameType, currentDifficulty); return; }
+             sentenceEnglishPromptEl.textContent = question.english;
+             sentenceWordBankEl.innerHTML = '';
+             const shuffledWords = shuffleArray([...question.words]);
+             shuffledWords.forEach((word, index) => { const wordEl = document.createElement('span'); wordEl.textContent = word; wordEl.id = `word-${index}-${Date.now()}`; wordEl.draggable = true; wordEl.className = 'word-bank-word bg-white border border-blue-300 text-blue-700 font-medium py-1 px-3 rounded-md shadow-sm'; wordEl.dataset.originalId = wordEl.id; wordEl.addEventListener('dragstart', handleDragStart); sentenceWordBankEl.appendChild(wordEl); });
+         }
+         function checkSentenceAnswer() {
+             // Cycle/Reshuffle Logic
+             if (!currentLevelData || currentLevelData.length === 0) return;
+             const question = currentLevelData[currentQuestionIndex];
+              if (!question) return;
+             const droppedWords = Array.from(sentenceDropZoneEl.querySelectorAll('.dropped-word')).map(el => el.textContent);
+             const constructedSentence = droppedWords.join(' ');
+             if (constructedSentence === question.correct) { showFeedback('Correct! 🎉', 'correct'); incrementStreak(); currentQuestionIndex++; if (currentQuestionIndex >= currentLevelData.length) { console.log("Reshuffling sentence list..."); showFeedback("Reshuffling sentences...", "info"); currentLevelData = shuffleArray(currentLevelData); currentQuestionIndex = 0; } setTimeout(displaySentenceQuestion, 1500); }
+             else { showFeedback('Incorrect. Try arranging the words differently.', 'incorrect', question.explanation); resetStreak(); }
+          }
+
+        // --- Drag and Drop Handlers ---
+        function handleDragStart(event) { if (event.target.classList.contains('word-bank-word')) { event.dataTransfer.setData('text/plain', event.target.id); event.dataTransfer.effectAllowed = 'move'; } else { event.preventDefault(); } }
+        function handleDragOver(event) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; if(sentenceDropZoneEl) sentenceDropZoneEl.classList.add('drag-over'); }
+        function handleDragLeave(event) { if (event.target === sentenceDropZoneEl) { if(sentenceDropZoneEl) sentenceDropZoneEl.classList.remove('drag-over'); } }
+        function handleDrop(event) { if (!sentenceDropZoneEl) return; event.preventDefault(); sentenceDropZoneEl.classList.remove('drag-over'); const wordId = event.dataTransfer.getData('text/plain'); const wordElement = document.getElementById(wordId); if (wordElement && wordElement.parentElement === sentenceWordBankEl) { const placeholder = sentenceDropZoneEl.querySelector('.italic'); if (placeholder) placeholder.remove(); const droppedWord = wordElement.cloneNode(true); droppedWord.id = `dropped-${wordId}`; droppedWord.draggable = false; droppedWord.classList.remove('word-bank-word'); droppedWord.classList.add('dropped-word', 'bg-blue-100'); droppedWord.dataset.originalId = wordId; droppedWord.onclick = (e) => { const originalWordEl = document.getElementById(e.target.dataset.originalId); if (originalWordEl) originalWordEl.style.display = 'inline-block'; e.target.remove(); checkEnableSentenceButton(); if (sentenceDropZoneEl.children.length === 0) sentenceDropZoneEl.innerHTML = '<span class="text-gray-400 italic">Drop words here...</span>'; }; sentenceDropZoneEl.appendChild(droppedWord); wordElement.style.display = 'none'; checkEnableSentenceButton(); } }
+        function checkEnableSentenceButton() { if (!sentenceDropZoneEl || !sentenceCheckButtonEl) return; const droppedWordsCount = sentenceDropZoneEl.querySelectorAll('.dropped-word').length; sentenceCheckButtonEl.disabled = droppedWordsCount === 0; }
+
+
+        // --- Story Game Functions ---
+        function displayStoryScene() {
+            clearFeedback();
+            if (!currentLevelData || !currentLevelData[currentStoryScene] || !storySceneTextEl || !storyChoicesEl) { displayComingSoonForType('story'); return; }
+            const scene = currentLevelData[currentStoryScene];
+            storySceneTextEl.textContent = scene.text;
+            storyChoicesEl.innerHTML = '';
+            if (scene.choices && Array.isArray(scene.choices) && scene.choices.length > 0) { scene.choices.forEach(choice => { const button = document.createElement('button'); button.textContent = choice.text; button.className = 'bg-purple-500 hover:bg-purple-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out flex-1'; button.onclick = () => handleStoryChoice(choice.next); storyChoicesEl.appendChild(button); }); }
+            else { storyChoicesEl.innerHTML = '<p class="text-purple-700 font-semibold">The end of this path.</p>'; }
+         }
+        function handleStoryChoice(nextSceneId) {
+            console.log("Moving to story scene:", nextSceneId);
+            if (currentLevelData && currentLevelData[nextSceneId]) { incrementStreak(); currentStoryScene = nextSceneId; displayStoryScene(); }
+            else { console.error("Next story scene not found:", nextSceneId); showFeedback("Error: Could not find the next part of the story.", 'incorrect'); resetStreak(); if(storyChoicesEl) storyChoicesEl.innerHTML += '<p class="text-red-600 mt-2">Error loading next scene.</p>'; }
+         }
+
+
+        // --- Typing Game Functions ---
+        function loadTypingGame() { clearFeedback(); typingGameActive = false; typingTimeLeft = 60; currentTypingScore = 0; if(typingTimerEl) typingTimerEl.textContent = typingTimeLeft; if(typingScoreEl) typingScoreEl.textContent = currentTypingScore; if(typingInputEl) { typingInputEl.value = ''; typingInputEl.disabled = true; } if(typingWordDisplayEl) typingWordDisplayEl.textContent = 'Press Start!'; if(typingStartButtonEl) { typingStartButtonEl.disabled = false; typingStartButtonEl.classList.remove('hidden'); typingStartButtonEl.classList.remove('opacity-50', 'cursor-not-allowed'); } try { typingHighScore = parseInt(localStorage.getItem(`typingHighScore_${currentDifficulty}`)) || 0; if(typingHighScoreEl) typingHighScoreEl.textContent = typingHighScore; } catch(e) { console.error("Could not access localStorage for typing high score", e); } if (!currentLevelData || currentLevelData.length === 0) { displayComingSoonForType('typing'); } }
+        function startTypingGame() { if (!currentLevelData || currentLevelData.length === 0 || !typingStartButtonEl || !typingInputEl) return; typingGameActive = true; currentTypingScore = 0; typingTimeLeft = 60; if(typingScoreEl) typingScoreEl.textContent = currentTypingScore; if(typingTimerEl) typingTimerEl.textContent = typingTimeLeft; typingStartButtonEl.classList.add('hidden'); typingInputEl.disabled = false; clearFeedback(); displayNextTypingWord(); typingInputEl.focus(); if (typingTimerInterval) clearInterval(typingTimerInterval); typingTimerInterval = setInterval(updateTypingTimer, 1000); typingInputEl.removeEventListener('keypress', handleTypingEnter); typingInputEl.addEventListener('keypress', handleTypingEnter); typingInputEl.removeEventListener('input', checkTypingInputRealtime); typingInputEl.addEventListener('input', checkTypingInputRealtime); }
+        function handleTypingEnter(event) { if (event.key === 'Enter' && typingGameActive) { event.preventDefault(); checkTypingInput(); } }
+        function checkTypingInputRealtime() { if (!typingGameActive || !typingInputEl) return; const typedValue = typingInputEl.value; if (currentTypingWord.startsWith(typedValue)) { typingInputEl.classList.remove('input-error'); } else { typingInputEl.classList.add('input-error'); } }
+        function updateTypingTimer() { typingTimeLeft--; if(typingTimerEl) typingTimerEl.textContent = typingTimeLeft; if(typingTimerEl) { typingTimerEl.classList.remove('timer-tick'); void typingTimerEl.offsetWidth; typingTimerEl.classList.add('timer-tick'); } if (typingTimeLeft <= 0) { endTypingGame(true); } }
+        function displayNextTypingWord() { if (!currentLevelData || currentLevelData.length === 0 || !typingWordDisplayEl) { if(typingWordDisplayEl) typingWordDisplayEl.textContent = "No words!"; return; } const randomIndex = Math.floor(Math.random() * currentLevelData.length); currentTypingWord = currentLevelData[randomIndex]; typingWordDisplayEl.textContent = currentTypingWord; }
+        function checkTypingInput() { if (!typingGameActive || !typingInputEl) return; const typedValue = typingInputEl.value.trim(); if (typedValue.toLowerCase() === currentTypingWord.toLowerCase()) { currentTypingScore++; if(typingScoreEl) typingScoreEl.textContent = currentTypingScore; typingInputEl.value = ''; typingInputEl.classList.remove('input-error'); displayNextTypingWord(); } else { typingInputEl.classList.add('input-error'); setTimeout(() => { if(typingInputEl) typingInputEl.classList.remove('input-error'); }, 400); } }
+        function endTypingGame(updateScore) { typingGameActive = false; if (typingTimerInterval) { clearInterval(typingTimerInterval); typingTimerInterval = null; } if(typingInputEl) { typingInputEl.disabled = true; typingInputEl.removeEventListener('keypress', handleTypingEnter); typingInputEl.removeEventListener('input', checkTypingInputRealtime); } if (updateScore) { showFeedback(`Time's up! Final Score: ${currentTypingScore}`, 'info'); if(typingWordDisplayEl) typingWordDisplayEl.textContent = "Game Over!"; if (currentTypingScore > typingHighScore) { typingHighScore = currentTypingScore; if(typingHighScoreEl) typingHighScoreEl.textContent = typingHighScore; try { localStorage.setItem(`typingHighScore_${currentDifficulty}`, typingHighScore); showFeedback(`New High Score for ${currentDifficulty}! 🎉: ${typingHighScore}`, 'correct'); } catch (e) { console.error("Failed to save high score to localStorage:", e); showFeedback("Could not save high score (localStorage might be disabled).", 'incorrect'); } } } else { if(typingWordDisplayEl) typingWordDisplayEl.textContent = "Game Stopped"; } if(typingStartButtonEl) { typingStartButtonEl.textContent = "Play Again?"; typingStartButtonEl.classList.remove('hidden'); } }
+
+
+        // --- Grammar Quiz Functions ---
+        function displayGrammarQuestion() {
+            clearFeedback();
+            if (!currentLevelData || currentLevelData.length === 0 || !grammarSentencePart1El || !grammarSentencePart2El || !grammarOptionsEl) { displayComingSoonForType('grammar'); return; }
+            if (currentQuestionIndex >= currentLevelData.length) currentQuestionIndex = 0;
+            const question = currentLevelData[currentQuestionIndex];
+            if (!question || !Array.isArray(question.sentenceParts) || !Array.isArray(question.options)) { console.error("Grammar Error: Invalid question data", currentQuestionIndex); loadGame(currentGameType, currentDifficulty); return; }
+
+            grammarSentencePart1El.textContent = question.sentenceParts[0] || '';
+            grammarSentencePart2El.textContent = question.sentenceParts[1] || '';
+            grammarOptionsEl.innerHTML = '';
+            selectedGrammarOptionIndex = 0;
+            const shuffledOptions = shuffleArray([...question.options]);
+
+            shuffledOptions.forEach((option, index) => { const li = document.createElement('li'); li.textContent = option; li.dataset.value = option; li.tabIndex = 0; li.className = 'grammar-option p-3 border-2 border-gray-300 rounded-md bg-white shadow-sm text-center font-medium text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400'; li.onclick = () => { selectedGrammarOptionIndex = index; highlightGrammarOption(index); checkGrammarAnswer(option); }; grammarOptionsEl.appendChild(li); });
+            highlightGrammarOption(selectedGrammarOptionIndex);
+            grammarOptionsEl.focus();
+        }
+        function handleGrammarKeyDown(event) {
+            if (currentGameType !== 'grammar' || !currentLevelData || currentLevelData.length === 0 || !grammarOptionsEl) return;
+            const options = grammarOptionsEl.querySelectorAll('.grammar-option');
+            if (!options || options.length === 0) return;
+            let newIndex = selectedGrammarOptionIndex; let preventDefault = true;
+            switch (event.key) { case 'ArrowLeft': case 'ArrowUp': newIndex = (selectedGrammarOptionIndex - 1 + options.length) % options.length; break; case 'ArrowRight': case 'ArrowDown': newIndex = (selectedGrammarOptionIndex + 1) % options.length; break; case 'Enter': case ' ': event.preventDefault(); const selectedOptionValue = options[selectedGrammarOptionIndex]?.dataset.value; if (selectedOptionValue) checkGrammarAnswer(selectedOptionValue); return; default: preventDefault = false; break; }
+            if (preventDefault) { event.preventDefault(); selectedGrammarOptionIndex = newIndex; highlightGrammarOption(selectedGrammarOptionIndex); options[selectedGrammarOptionIndex].focus(); }
+        }
+        function highlightGrammarOption(index) {
+            if (!grammarOptionsEl) return;
+            const options = grammarOptionsEl.querySelectorAll('.grammar-option');
+            options.forEach((li, i) => { if (i === index) li.classList.add('selected'); else li.classList.remove('selected'); });
+        }
+        function checkGrammarAnswer(selectedValue) {
+            // Cycle/Reshuffle Logic
+             if (!currentLevelData || currentLevelData.length === 0) return;
+            const question = currentLevelData[currentQuestionIndex];
+            if (!question) return;
+            if (selectedValue === question.correct) { showFeedback('Correct! 🎉', 'correct'); incrementStreak(); currentQuestionIndex++; if (currentQuestionIndex >= currentLevelData.length) { console.log("Reshuffling grammar list..."); showFeedback("Reshuffling questions...", "info"); currentLevelData = shuffleArray(currentLevelData); currentQuestionIndex = 0; } setTimeout(displayGrammarQuestion, 1500); }
+            else { showFeedback(`Incorrect. The answer is "${question.correct}".`, 'incorrect', question.explanation); resetStreak(); }
+        }
+
+        // --- Phrase Check Functions ---
+        function displayPhraseCheckQuestion() {
+            clearFeedback();
+             if (!currentLevelData || currentLevelData.length === 0 || !phraseCheckSentenceDisplayEl) { displayComingSoonForType('phraseCheck'); return; }
+             if (currentQuestionIndex >= currentLevelData.length) currentQuestionIndex = 0;
+             const question = currentLevelData[currentQuestionIndex];
+             if (!question) { console.error("PhraseCheck Error: Question null at index", currentQuestionIndex); loadGame(currentGameType, currentDifficulty); return; }
+             phraseCheckSentenceDisplayEl.textContent = question.sentence;
+             const correctBtn = document.getElementById('phraseCheck-correct-btn'); const incorrectBtn = document.getElementById('phraseCheck-incorrect-btn');
+             if(correctBtn) correctBtn.disabled = false; if(incorrectBtn) incorrectBtn.disabled = false;
+         }
+        function checkPhraseAnswer(userSaysCorrect) {
+            // Cycle/Reshuffle Logic
+            const correctBtn = document.getElementById('phraseCheck-correct-btn'); const incorrectBtn = document.getElementById('phraseCheck-incorrect-btn');
+            if(correctBtn) correctBtn.disabled = true; if(incorrectBtn) incorrectBtn.disabled = true;
+            if (!currentLevelData || currentLevelData.length === 0) return;
+            const question = currentLevelData[currentQuestionIndex];
+            if (!question) return;
+
+            const isActuallyCorrect = question.isCorrect;
+            let feedbackType = 'incorrect'; let feedbackMsg = ''; let proceed = false;
+            if (userSaysCorrect === isActuallyCorrect) { feedbackType = 'correct'; feedbackMsg = 'Correct! 🎉'; incrementStreak(); proceed = true; }
+            else { resetStreak(); if (isActuallyCorrect) feedbackMsg = `Incorrect. This sentence *is* correct.`; else feedbackMsg = `Incorrect. The correct version is: "${question.correctVersion}"`; proceed = true; }
+            showFeedback(feedbackMsg, feedbackType, question.explanation);
+
+            if (proceed) { currentQuestionIndex++; if (currentQuestionIndex >= currentLevelData.length) { console.log("Reshuffling phrase check list..."); showFeedback("Reshuffling phrases...", "info"); currentLevelData = shuffleArray(currentLevelData); currentQuestionIndex = 0; } setTimeout(displayPhraseCheckQuestion, 2000); }
+            else { if(correctBtn) correctBtn.disabled = false; if(incorrectBtn) incorrectBtn.disabled = false; }
+        }
+
+
+        // --- Initial Load ---
+        window.onload = () => {
+             // Assign DOM elements AFTER DOM is loaded
+             tabButtons = document.querySelectorAll('.tab');
+             gameAreas = document.querySelectorAll('.game-area');
+             vocabGamePlayEl = document.getElementById('vocab-game-play'); vocabEnglishWordEl = document.getElementById('vocab-english-word'); vocabOptionsEl = document.getElementById('vocab-options'); feedbackAreaVocabEl = document.getElementById('feedback-area-vocab');
+             sentenceGamePlayEl = document.getElementById('sentence-game-play'); sentenceEnglishPromptEl = document.getElementById('sentence-english-prompt'); sentenceDropZoneEl = document.getElementById('sentence-drop-zone'); sentenceWordBankEl = document.getElementById('sentence-word-bank'); sentenceCheckButtonEl = document.getElementById('sentence-check-button'); feedbackAreaSentenceEl = document.getElementById('feedback-area-sentence');
+             storyGamePlayEl = document.getElementById('story-game-play'); storySceneTextEl = document.getElementById('story-scene-text'); storyChoicesEl = document.getElementById('story-choices'); feedbackAreaStoryEl = document.getElementById('feedback-area-story');
+             typingGamePlayEl = document.getElementById('typing-game-play'); typingTimerEl = document.getElementById('typing-timer'); typingScoreEl = document.getElementById('typing-score'); typingHighScoreEl = document.getElementById('typing-highscore'); typingWordDisplayEl = document.getElementById('typing-word-display'); typingInputEl = document.getElementById('typing-input'); typingStartButtonEl = document.getElementById('typing-start-button'); feedbackAreaTypingEl = document.getElementById('feedback-area-typing');
+             streakCounterEl = document.getElementById('streak-counter'); streakIconEl = document.getElementById('streak-icon'); streakValueEl = document.getElementById('streak-value');
+             grammarGamePlayEl = document.getElementById('grammar-game-play'); grammarSentencePart1El = document.getElementById('grammar-sentence-part1'); grammarSentencePart2El = document.getElementById('grammar-sentence-part2'); grammarOptionsEl = document.getElementById('grammar-options'); feedbackAreaGrammarEl = document.getElementById('feedback-area-grammar');
+             phraseCheckGamePlayEl = document.getElementById('phraseCheck-game-play'); phraseCheckSentenceDisplayEl = document.getElementById('phraseCheck-sentence-display'); feedbackAreaPhraseCheckEl = document.getElementById('feedback-area-phraseCheck');
+             streakHsVocabEl = document.getElementById('streak-highscore-vocab'); streakHsSentenceEl = document.getElementById('streak-highscore-sentence'); streakHsStoryEl = document.getElementById('streak-highscore-story'); streakHsGrammarEl = document.getElementById('streak-highscore-grammar'); streakHsPhraseCheckEl = document.getElementById('streak-highscore-phraseCheck');
+
+             // Add global key listener for grammar game
+             window.addEventListener('keydown', handleGrammarKeyDown);
+
+             updateStreakDisplay(); // Initialize streak display
+             loadGame(currentGameType, currentDifficulty); // Load default game
+        };
+
+    </script>
+
+</body>
+</html>
